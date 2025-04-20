@@ -57,7 +57,7 @@ export default function TabTwoScreen() {
     setError(null);
 
     axios
-      .post("http://localhost:2423/grades", { username, password })
+      .post("https://bk-ems.abdisa.me/grades", { username, password })
       .then((response) => {
         setGrades(response.data);
         setLoggedIn(true);
@@ -86,7 +86,7 @@ export default function TabTwoScreen() {
   }, {});
 
   const sortedYears = Object.keys(groupedByYear).sort((a, b) => {
-    const yearOrder = ["I", "II", "III", "IV", "V", "Unknown"];
+    const yearOrder = ["I", "II", "III", "IV", "V", "VI", "Unknown"];
     return yearOrder.indexOf(b) - yearOrder.indexOf(a);
   });
 
@@ -178,6 +178,7 @@ export default function TabTwoScreen() {
                           Code: {grade.code} | Credit: {grade.creditHour} |
                           ECTS: {grade.ects}
                         </Text>
+                        <View style={styles.cardSeparatorDark} />
                         <View style={styles.gradeDetailsRowDark}>
                           <View style={styles.detailsColumnDark}>
                             <Text style={styles.cardDetailsDark}>
@@ -242,7 +243,7 @@ const styles = StyleSheet.create({
   yearSection: {
     marginBottom: 25,
     width: "100%",
-    alignSelf: "center",
+    marginHorizontal: 5,
   },
   yearHeaderDark: {
     backgroundColor: "#282c34",
@@ -266,6 +267,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     textAlign: "center",
+    flex: 1,
   },
 
   cardDark: {
@@ -281,7 +283,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#3a3f47",
-    width: "100%",
   },
   cardLabelDark: {
     fontSize: 11,
@@ -353,7 +354,7 @@ const styles = StyleSheet.create({
   cardAcademicInfoDark: {
     fontSize: 11,
     color: "#aaa",
-    textAlign: "right",
+    textAlign: "right", // Kept right aligned for this smaller text
   },
 
   centeredContentDark: {
