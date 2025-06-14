@@ -1,32 +1,20 @@
-import axios from "axios";
-import { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  FlatList,
   ActivityIndicator,
-  LayoutAnimation,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Modal,
   Platform,
   UIManager,
-  Dimensions,
 } from "react-native";
-
-const { width } = Dimensions.get("window");
-
-interface Grade {
-  no: string;
-  courseTitle: string;
-  code: string;
-  creditHour: string;
-  ects: string;
-  grade: string;
-  academicYear: string;
-  year: string;
-  semester: string;
-}
+import { useAuth, Grade } from "../../context/AuthContext";
+import { COLORS, FONT_SIZES, SPACING } from "../../constants/theme";
+import { Feather } from "@expo/vector-icons";
 
 if (
   Platform.OS === "android" &&
@@ -35,411 +23,552 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function TabTwoScreen() {
-  const [grades, setGrades] = useState<Grade[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<any>(null);
-  const [collapsedYears, setCollapsedYears] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [loggedIn, setLoggedIn] = useState(false);
-
+const LoginView = () => {
+  const { login, isLoading, loadingMessage } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
-  const login = () => {
+  const handleLogin = async () => {
     if (!username || !password) {
-      setError({ message: "Please fill both fields." });
+      setError("Please enter both username and password.");
       return;
     }
-
-    setLoading(true);
-    setError(null);
-
-    axios
-      .post("https://bk-ems.abdisa.me/grades", { username, password })
-      .then((response) => {
-        setGrades(response.data);
-        setLoggedIn(true);
-        setLoading(false);
-        setError(null);
-      })
-      .catch((err) => {
-        console.error("Login error:", err.response?.data || err.message);
-        setError({
-          message: err.response?.data?.message || err.message || "Login failed",
-        });
-        setLoading(false);
-      });
+    setError("");
+    try {
+      await login(username, password);
+    } catch (e: any) {
+      setError(e.message || "An unknown error occurred.");
+    }
   };
 
-  const toggleYear = (year: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setCollapsedYears((prev) => ({ ...prev, [year]: !prev[year] }));
-  };
+  return (
+    <View style={styles.loginBox}>
+      <Text style={styles.loginTitle}>Access Your Grades</Text>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      <TextInput
+        style={styles.input}
+        placeholder="Portal Username"
+        placeholderTextColor={COLORS.textSecondary}
+        value={username}
+        onChangeText={setUsername}
+        autoCapitalize="none"
+        editable={!isLoading}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Password"
+        placeholderTextColor={COLORS.textSecondary}
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+        editable={!isLoading}
+      />
+      <TouchableOpacity
+        style={styles.button}
+        onPress={handleLogin}
+        disabled={!!loadingMessage}
+      >
+        <Text style={styles.buttonText}>
+          {loadingMessage || "Login & Sync Grades"}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
 
-  const groupedByYear = grades.reduce<Record<string, Grade[]>>((acc, grade) => {
-    const year = grade.year || "Unknown";
-    if (!acc[year]) acc[year] = [];
-    acc[year].push(grade);
-    return acc;
-  }, {});
+const getGradeColor = (grade: string) => {
+  const gradeUpper = grade.toUpperCase();
+  if (gradeUpper.startsWith("A")) return "#28a745"; // Green for A
+  if (gradeUpper.startsWith("B")) return "#17a2b8"; // Blue for B
+  if (gradeUpper.startsWith("C")) return "#ffc107"; // Yellow for C
+  if (gradeUpper.startsWith("D") || gradeUpper.startsWith("F"))
+    return "#dc3545"; // Red for D/F
+  return COLORS.primary;
+};
 
-  const sortedYears = Object.keys(groupedByYear).sort((a, b) => {
-    const yearOrder = ["I", "II", "III", "IV", "V", "VI", "Unknown"];
-    return yearOrder.indexOf(b) - yearOrder.indexOf(a);
-  });
+export default function GradeScreen() {
+  const { isLoggedIn, grades, isLoading, loadingMessage } = useAuth();
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<
+    string | null
+  >(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [selectedGrade, setSelectedGrade] = useState<Grade | null>(null);
 
-  if (!loggedIn) {
+  const groupedGrades = grades.reduce<Record<string, Record<string, Grade[]>>>(
+    (acc, grade) => {
+      const academicYear = grade.academicYear || "Unknown Year";
+      const semester = grade.semester || "Unknown Semester";
+
+      if (academicYear === "Unknown Year") return acc;
+
+      if (!acc[academicYear]) {
+        acc[academicYear] = {};
+      }
+      if (!acc[academicYear][semester]) {
+        acc[academicYear][semester] = [];
+      }
+      acc[academicYear][semester].push(grade);
+      return acc;
+    },
+    {}
+  );
+
+  const academicYears = Object.keys(groupedGrades).sort((a, b) =>
+    b.localeCompare(a)
+  );
+
+  useEffect(() => {
+    if (academicYears.length > 0 && !selectedAcademicYear) {
+      setSelectedAcademicYear(academicYears[0]);
+    }
+  }, [academicYears, selectedAcademicYear]);
+
+  if (isLoading && grades.length === 0) {
     return (
-      <View style={styles.darkBackground}>
-        <View style={styles.loginBoxDark}>
-          <Text style={styles.loginTitleDark}>Login to View Grades</Text>
-          <TextInput
-            placeholder="Username"
-            placeholderTextColor="#888"
-            value={username}
-            onChangeText={setUsername}
-            style={styles.inputDarkBox}
-            autoCapitalize="none"
-          />
-          <TextInput
-            placeholder="Password"
-            placeholderTextColor="#888"
-            value={password}
-            onChangeText={setPassword}
-            style={styles.inputDarkBox}
-            secureTextEntry
-          />
-          {error && error.message ? (
-            <Text style={styles.errorTextLoginBox}>{error.message}</Text>
-          ) : null}
-          <TouchableOpacity
-            onPress={login}
-            style={styles.loginButtonDarkBox}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.loginButtonTextDarkBox}>Login</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+      <View style={styles.loadingContainerFull}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>{loadingMessage}</Text>
       </View>
     );
   }
 
-  return (
-    <View style={styles.darkBackground}>
-      <ScrollView contentContainerStyle={styles.container}>
-        {grades.length === 0 && !loading && !error ? (
-          <View style={styles.centeredContentDark}>
-            {" "}
-            <Text style={styles.noDataTextDark}>
-              No grades available at the moment.
-            </Text>
+  if (!isLoggedIn) {
+    return <LoginView />;
+  }
+
+  const renderAssessmentItem = ({
+    item,
+    index,
+  }: {
+    item: { name: string; result: string };
+    index: number;
+  }) => (
+    <View
+      style={[
+        styles.assessmentRow,
+        index % 2 !== 0 && styles.assessmentRowAlternate,
+        item.name.toLowerCase() === "total" && styles.totalRow,
+      ]}
+    >
+      <Text
+        style={[
+          styles.assessmentName,
+          item.name.toLowerCase() === "total" && styles.totalName,
+        ]}
+      >
+        {item.name}
+      </Text>
+      <Text
+        style={[
+          styles.assessmentResult,
+          item.name.toLowerCase() === "total" && styles.totalResult,
+        ]}
+      >
+        {item.result}
+      </Text>
+    </View>
+  );
+
+  const renderGradeCard = (grade: Grade) => {
+    const gradeColor = getGradeColor(grade.grade);
+    return (
+      <TouchableOpacity
+        key={`${grade.no}-${grade.code}`}
+        style={styles.card}
+        onPress={() => setSelectedGrade(grade)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>{grade.courseTitle}</Text>
+          <View style={[styles.gradeDisplay, { backgroundColor: gradeColor }]}>
+            <Text style={styles.gradeText}>{grade.grade}</Text>
           </View>
-        ) : (
-          sortedYears.map((year) => {
-            const yearGrades = groupedByYear[year];
-            if (!yearGrades || yearGrades.length === 0) return null;
+        </View>
+        <View style={styles.cardSeparator} />
+        <View style={styles.cardBody}>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Code</Text>
+            <Text style={styles.detailValue}>{grade.code}</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Credit</Text>
+            <Text style={styles.detailValue}>{grade.creditHour}</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>ECTS</Text>
+            <Text style={styles.detailValue}>{grade.ects}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
-            return (
-              <View key={year} style={styles.yearSection}>
-                <TouchableOpacity
-                  onPress={() => toggleYear(year)}
-                  style={styles.yearHeaderDark}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.yearHeaderTextDark}>
-                    Year {year} {collapsedYears[year] ? "▼" : "▲"}
-                  </Text>
-                </TouchableOpacity>
+  return (
+    <View style={styles.container}>
+      <View style={styles.pickerContainer}>
+        <Text style={styles.pickerLabel}>Academic Year</Text>
+        <TouchableOpacity
+          style={styles.pickerButton}
+          onPress={() => setPickerOpen(true)}
+          disabled={academicYears.length === 0}
+        >
+          <Text style={styles.pickerButtonText}>
+            {selectedAcademicYear || "No grades available"}
+          </Text>
+          <Feather name="chevron-down" size={22} color={COLORS.primary} />
+        </TouchableOpacity>
+      </View>
 
-                {!collapsedYears[year] && (
-                  <View>
-                    {yearGrades.map((grade) => (
-                      <TouchableOpacity
-                        key={grade.no}
-                        onPress={() =>
-                          alert(
-                            `Course: ${grade.courseTitle}, Grade: ${grade.grade}`
-                          )
-                        }
-                        activeOpacity={0.8}
-                        style={styles.cardDark}
-                      >
-                        <Text style={styles.cardLabelDark}>COURSE</Text>
-                        <Text style={styles.cardTitleDark}>
-                          {grade.courseTitle}
-                        </Text>
-                        <Text style={styles.cardBodyTextDark}>
-                          Code: {grade.code} | Credit: {grade.creditHour} |
-                          ECTS: {grade.ects}
-                        </Text>
-                        <View style={styles.cardSeparatorDark} />
-                        <View style={styles.gradeDetailsRowDark}>
-                          <View style={styles.detailsColumnDark}>
-                            <Text style={styles.cardDetailsDark}>
-                              Credit Hour: {grade.creditHour}
-                            </Text>
-                            <Text style={styles.cardDetailsDark}>
-                              ECTS: {grade.ects}
-                            </Text>
-                          </View>
-                          <View style={styles.gradeDisplayDark}>
-                            <Text style={styles.gradeTextDark}>
-                              {grade.grade}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.academicInfoContainer}>
-                          <Text style={styles.cardAcademicInfoDark}>
-                            {grade.academicYear} | {grade.semester}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {selectedAcademicYear &&
+          groupedGrades[selectedAcademicYear] &&
+          Object.keys(groupedGrades[selectedAcademicYear])
+            .sort()
+            .map((semester) => (
+              <View key={semester} style={styles.semesterSection}>
+                <Text style={styles.semesterTitle}>{semester}</Text>
+                {groupedGrades[selectedAcademicYear][semester].map((grade) =>
+                  renderGradeCard(grade)
                 )}
               </View>
-            );
-          })
-        )}
-        {loading && grades.length === 0 && (
-          <View style={styles.centeredContentDark}>
-            <ActivityIndicator size="large" color="#fff" />
-            <Text style={styles.loadingTextDark}>Fetching Grades...</Text>
-          </View>
-        )}
-        {error && grades.length === 0 && (
-          <View style={styles.centeredContentDark}>
-            <Text style={styles.errorTitleDark}>Error Loading Data</Text>
-            <Text style={styles.errorTextDarkBackground}>{error.message}</Text>
-          </View>
-        )}
+            ))}
       </ScrollView>
+
+      <Modal
+        transparent={true}
+        visible={pickerOpen}
+        onRequestClose={() => setPickerOpen(false)}
+        animationType="fade"
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          onPress={() => setPickerOpen(false)}
+        >
+          <View style={styles.pickerModal}>
+            {academicYears.map((year) => (
+              <TouchableOpacity
+                key={year}
+                style={styles.pickerItem}
+                onPress={() => {
+                  setSelectedAcademicYear(year);
+                  setPickerOpen(false);
+                }}
+              >
+                <Text style={styles.pickerItemText}>{year}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        transparent={true}
+        visible={selectedGrade !== null}
+        onRequestClose={() => setSelectedGrade(null)}
+        animationType="slide"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {selectedGrade && (
+              <>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={() => setSelectedGrade(null)}
+                >
+                  <Feather name="x" size={28} color={COLORS.textSecondary} />
+                </TouchableOpacity>
+                <Text style={styles.modalTitle}>
+                  {selectedGrade.courseTitle}
+                </Text>
+                <FlatList
+                  data={selectedGrade.assessments}
+                  renderItem={renderAssessmentItem}
+                  keyExtractor={(item) => item.name}
+                  ListHeaderComponent={() => (
+                    <View style={styles.listHeader}>
+                      <Text style={styles.listHeaderTextName}>Assessment</Text>
+                      <Text style={styles.listHeaderTextResult}>Result</Text>
+                    </View>
+                  )}
+                />
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  darkBackground: {
-    flex: 1,
-    backgroundColor: "#1e1e1e",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
   container: {
-    flexGrow: 1,
-    paddingTop: 20,
-    paddingHorizontal: 15,
-    paddingBottom: 20,
-    alignItems: "stretch",
+    flex: 1,
+    backgroundColor: COLORS.background,
+    padding: SPACING.md,
   },
-  yearSection: {
-    marginBottom: 25,
-    width: "100%",
-    marginHorizontal: 5,
-  },
-  yearHeaderDark: {
-    backgroundColor: "#282c34",
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    marginBottom: 15,
+  loadingContainerFull: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#3a3f47",
-    width: "100%",
+    backgroundColor: COLORS.background,
   },
-  yearHeaderTextDark: {
-    color: "#fff",
-    fontSize: 18,
+  loadingText: {
+    marginTop: SPACING.md,
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZES.body,
+  },
+  loginBox: {
+    flex: 1,
+    justifyContent: "center",
+    padding: SPACING.lg,
+    backgroundColor: COLORS.background,
+  },
+  loginTitle: {
+    fontSize: FONT_SIZES.h1,
+    color: COLORS.text,
     fontWeight: "bold",
     textAlign: "center",
-    flex: 1,
+    marginBottom: SPACING.xl,
   },
-
-  cardDark: {
-    backgroundColor: "#282c34",
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 18,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#3a3f47",
+  input: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    borderRadius: SPACING.sm,
+    fontSize: FONT_SIZES.body,
+    color: COLORS.text,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  cardLabelDark: {
-    fontSize: 11,
-    color: "rgba(255, 255, 255, 0.5)",
+  button: {
+    backgroundColor: COLORS.primary,
+    padding: SPACING.md,
+    borderRadius: SPACING.sm,
+    alignItems: "center",
+    marginTop: SPACING.sm,
+  },
+  buttonText: {
+    color: COLORS.text,
     fontWeight: "bold",
-    marginBottom: 4,
-    textAlign: "left",
+    fontSize: FONT_SIZES.body,
   },
-  cardTitleDark: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 10,
-    textAlign: "left",
+  loadingContainerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  cardBodyTextDark: {
-    fontSize: 14,
-    color: "#eee",
-    marginBottom: 15,
-    lineHeight: 20,
-    textAlign: "left",
+  errorText: {
+    color: COLORS.error,
+    textAlign: "center",
+    marginBottom: SPACING.md,
   },
-  cardSeparatorDark: {
-    height: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    marginVertical: 15,
+  pickerContainer: {
+    marginBottom: SPACING.md,
   },
-  gradeDetailsRowDark: {
+  pickerLabel: {
+    color: COLORS.textSecondary,
+    fontSize: FONT_SIZES.body,
+    marginBottom: SPACING.sm,
+  },
+  pickerButton: {
+    backgroundColor: COLORS.surface,
+    borderRadius: SPACING.sm,
+    padding: SPACING.md,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 10,
-    paddingTop: 0,
-    borderTopWidth: 0,
-    borderTopColor: "transparent",
   },
-  detailsColumnDark: {
-    flexShrink: 1,
-    marginRight: 15,
+  pickerButtonText: {
+    color: COLORS.text,
+    fontSize: FONT_SIZES.body,
   },
-  cardDetailsDark: {
-    fontSize: 13,
-    color: "#ccc",
-    marginBottom: 2,
-    textAlign: "left",
+  semesterSection: {
+    marginBottom: SPACING.lg,
   },
-  gradeDisplayDark: {
-    backgroundColor: "#3a3f47",
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    minWidth: 60,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  gradeTextDark: {
-    fontSize: 24,
+  semesterTitle: {
+    fontSize: FONT_SIZES.h2,
     fontWeight: "bold",
-    color: "#fff",
-    textAlign: "center",
+    color: COLORS.primary,
+    marginBottom: SPACING.md,
+    paddingBottom: SPACING.sm,
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary,
   },
-
-  academicInfoContainer: {
-    marginTop: 15,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#3a3f47",
-    paddingTop: 10,
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: SPACING.md,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  cardAcademicInfoDark: {
-    fontSize: 11,
-    color: "#aaa",
-    textAlign: "right", // Kept right aligned for this smaller text
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
-
-  centeredContentDark: {
+  cardTitle: {
+    fontSize: FONT_SIZES.h3,
+    fontWeight: "bold",
+    color: COLORS.text,
+    flexShrink: 1,
+    marginRight: SPACING.sm,
+  },
+  gradeDisplay: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 50,
+    width: 48,
+    height: 48,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  gradeText: {
+    fontSize: FONT_SIZES.h3,
+    fontWeight: "bold",
+    color: COLORS.text,
+  },
+  cardSeparator: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: SPACING.md,
+  },
+  cardBody: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  detailItem: {
+    alignItems: "center",
+  },
+  detailLabel: {
+    fontSize: FONT_SIZES.caption,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xs,
+  },
+  detailValue: {
+    fontSize: FONT_SIZES.body,
+    color: COLORS.text,
+    fontWeight: "600",
+  },
+  modalOverlay: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
   },
-  loadingTextDark: {
-    marginTop: 10,
-    fontSize: 16,
-    color: "#fff",
+  pickerModal: {
+    backgroundColor: COLORS.surface,
+    borderRadius: SPACING.md,
+    padding: SPACING.sm,
+    width: "80%",
+    maxHeight: "60%",
   },
-  errorTitleDark: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#ff6b6b",
-    marginBottom: 10,
+  pickerItem: {
+    padding: SPACING.md,
+  },
+  pickerItemText: {
+    color: COLORS.text,
+    fontSize: FONT_SIZES.body,
     textAlign: "center",
   },
-  errorTextDarkBackground: {
-    color: "#ff8e8e",
-    fontSize: 16,
-    textAlign: "center",
-    paddingHorizontal: 20,
-  },
-  noDataTextDark: {
-    fontSize: 18,
-    color: "#ccc",
-    textAlign: "center",
-    paddingHorizontal: 20,
-  },
-
-  loginBoxDark: {
+  modalContainer: {
     width: "90%",
     maxWidth: 400,
-    backgroundColor: "#282c34",
-    padding: 25,
-    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderRadius: SPACING.lg,
+    padding: SPACING.lg,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#3a3f47",
-  },
-  loginTitleDark: {
-    fontSize: 24,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 30,
-    color: "#fff",
-  },
-  inputDarkBox: {
-    backgroundColor: "#3a3f47",
-    padding: 14,
-    marginBottom: 20,
-    borderRadius: 12,
-    fontSize: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 10,
     borderWidth: 1,
-    borderColor: "#555",
-    color: "#fff",
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
-  loginButtonDarkBox: {
-    backgroundColor: "#000000",
-    padding: 15,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  loginButtonTextDarkBox: {
-    color: "#fff",
+  modalTitle: {
+    fontSize: FONT_SIZES.h2,
     fontWeight: "bold",
-    fontSize: 18,
-  },
-  errorTextLoginBox: {
-    color: "#ffb3b3",
-    marginBottom: 10,
+    color: COLORS.text,
+    marginBottom: SPACING.lg,
     textAlign: "center",
-    fontSize: 14,
+    paddingHorizontal: SPACING.lg,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    width: "100%",
+  },
+  listHeader: {
+    flexDirection: "row",
+    paddingBottom: SPACING.sm,
+    width: "100%",
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    marginBottom: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+  },
+  listHeaderTextName: {
+    color: COLORS.textSecondary,
+    fontWeight: "bold",
+    fontSize: FONT_SIZES.body,
+    flex: 3,
+  },
+  listHeaderTextResult: {
+    color: COLORS.textSecondary,
+    fontWeight: "bold",
+    fontSize: FONT_SIZES.body,
+    flex: 1,
+    textAlign: "right",
+  },
+  assessmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  assessmentRowAlternate: {
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+  },
+  assessmentName: {
+    fontSize: FONT_SIZES.body,
+    color: COLORS.textSecondary,
+    flex: 3,
+  },
+  assessmentResult: {
+    fontSize: FONT_SIZES.body,
+    fontWeight: "600",
+    color: COLORS.text,
+    flex: 1,
+    textAlign: "right",
+  },
+  totalRow: {
+    borderTopWidth: 2,
+    borderColor: COLORS.primary,
+    marginTop: SPACING.md,
+    paddingTop: SPACING.md,
+    backgroundColor: "rgba(29, 161, 242, 0.1)",
+  },
+  totalName: {
+    color: COLORS.text,
+    fontSize: FONT_SIZES.h3,
+    fontWeight: "bold",
+  },
+  totalResult: {
+    color: COLORS.primary,
+    fontSize: FONT_SIZES.h3,
+    fontWeight: "bold",
+  },
+  modalCloseButton: {
+    position: "absolute",
+    top: SPACING.md,
+    right: SPACING.md,
+    zIndex: 1,
+    padding: SPACING.xs,
   },
 });

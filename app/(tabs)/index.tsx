@@ -1,22 +1,77 @@
-import { Text, StyleSheet, Pressable, View } from "react-native";
-
-import { useNavigation } from "expo-router";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
+import { COLORS, FONT_SIZES, SPACING } from "../../constants/theme";
+import { useAuth } from "../../context/AuthContext";
+import { Feather } from "@expo/vector-icons";
 
 export default function HomeScreen() {
-  const navigator = useNavigation();
+  const { sync, logout, isLoading, loadingMessage, isLoggedIn } = useAuth();
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Welcome to the EMS</Text>
-      <Text style={styles.description}>
-        Stay on top of your grades with instant updates and insights.
-      </Text>
+      <View style={styles.header}>
+        <Feather name="home" size={40} color={COLORS.primary} />
+        <Text style={styles.title}>Welcome to EMS</Text>
+        <Text style={styles.subtitle}>
+          Your student portal companion. Access your grades and performance
+          analysis instantly.
+        </Text>
+      </View>
 
-      <Pressable
-        style={styles.button}
-        onPress={() => navigator.navigate("grade")}
-      >
-        <Text style={styles.buttonText}>Check My Grade</Text>
-      </Pressable>
+      {isLoggedIn ? (
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={sync}
+            disabled={isLoading}
+          >
+            {isLoading && loadingMessage ? (
+              <View style={styles.loadingContainerRow}>
+                <ActivityIndicator
+                  color={COLORS.text}
+                  style={{ marginRight: SPACING.sm }}
+                />
+                <Text style={styles.buttonText}>{loadingMessage}</Text>
+              </View>
+            ) : (
+              <>
+                <Feather
+                  name="refresh-cw"
+                  size={20}
+                  color={COLORS.text}
+                  style={{ marginRight: SPACING.sm }}
+                />
+                <Text style={styles.buttonText}>Sync Data</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.logoutButton]}
+            onPress={logout}
+            disabled={isLoading}
+          >
+            <Feather
+              name="log-out"
+              size={20}
+              color={COLORS.text}
+              style={{ marginRight: SPACING.sm }}
+            />
+            <Text style={styles.buttonText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.loggedOutContainer}>
+          <Text style={styles.loggedOutText}>
+            Please log in via the 'Grades' or 'Analysis' tab to get started.
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -24,34 +79,63 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: COLORS.background,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
-    backgroundColor: "#1e1e1e",
+    padding: SPACING.lg,
+  },
+  header: {
+    alignItems: "center",
+    textAlign: "center",
+    marginBottom: SPACING.xl * 2,
   },
   title: {
-    fontSize: 24,
+    fontSize: FONT_SIZES.h1,
     fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 10,
-    textAlign: "center",
+    color: COLORS.text,
+    marginTop: SPACING.md,
   },
-  description: {
-    fontSize: 16,
-    color: "#ccc",
+  subtitle: {
+    fontSize: FONT_SIZES.body,
+    color: COLORS.textSecondary,
     textAlign: "center",
-    marginBottom: 20,
+    marginTop: SPACING.sm,
+    maxWidth: "90%",
+  },
+  buttonContainer: {
+    width: "100%",
   },
   button: {
-    backgroundColor: "#000",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    marginTop: 10,
+    backgroundColor: COLORS.primary,
+    padding: SPACING.md,
+    borderRadius: SPACING.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    marginBottom: SPACING.md,
+  },
+  logoutButton: {
+    backgroundColor: COLORS.error,
   },
   buttonText: {
-    color: "#fff",
-    fontSize: 16,
+    color: COLORS.text,
     fontWeight: "bold",
+    fontSize: FONT_SIZES.body,
+  },
+  loadingContainerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loggedOutContainer: {
+    padding: SPACING.lg,
+    backgroundColor: COLORS.surface,
+    borderRadius: SPACING.md,
+    width: "100%",
+  },
+  loggedOutText: {
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    fontSize: FONT_SIZES.body,
   },
 });

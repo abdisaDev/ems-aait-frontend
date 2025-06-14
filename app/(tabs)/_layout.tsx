@@ -1,47 +1,46 @@
 import { Tabs } from "expo-router";
 import React from "react";
-import { Platform } from "react-native";
-
-import { HapticTab } from "@/components/HapticTab";
-import { IconSymbol } from "@/components/ui/IconSymbol";
-import TabBarBackground from "@/components/ui/TabBarBackground";
-import { Colors } from "@/constants/Colors";
-import { useColorScheme } from "@/hooks/useColorScheme";
+import { Feather } from "@expo/vector-icons";
+import { COLORS } from "@/constants/theme";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? "light"].tint,
         headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            // Use a transparent background on iOS to show the blur effect
-            position: "absolute",
-          },
-          default: {},
-        }),
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.textSecondary,
+        tabBarStyle: {
+          backgroundColor: COLORS.surface,
+          borderTopWidth: 0, // Removes the default top border
+          elevation: 0, // Removes shadow on Android
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="home" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="grade"
         options={{
-          title: "Grade",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="leaderboard.fill" color={color} />
+          title: "Grades",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="bar-chart-2" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="analysis"
+        options={{
+          title: "Analysis",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="trending-up" size={size} color={color} />
           ),
         }}
       />
