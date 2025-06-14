@@ -10,7 +10,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Alert } from "react-native";
 
-const API_URL = "http://192.168.1.6:2423"; // Ensure this IP is correct
+const API_URL = "http://192.168.1.6:2423";
 
 export interface Assessment {
   name: string;
